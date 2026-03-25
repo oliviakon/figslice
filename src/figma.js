@@ -31,7 +31,9 @@ async function figmaGet(path, token, retries = 3) {
     }
     if (!r.ok) {
       if (r.status === 403) throw new Error('Invalid token or no access to this file')
-      throw new Error(`Figma API error ${r.status}`)
+      const body = await r.text().catch(() => '')
+      console.error(`Figma API ${r.status}:`, path, body)
+      throw new Error(`Figma API error ${r.status}${body ? ': ' + body.slice(0, 200) : ''}`)
     }
     return r.json()
   }
@@ -50,7 +52,7 @@ export async function fetchFigmaFile(fileKey, token, nodeId) {
  */
 export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
   const data = await figmaGet(
-    `/images/${fileKey}?ids=${nodeId}&format=png&scale=${scale}&use_absolute_bounds=true`,
+    `/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&format=png&scale=${scale}&use_absolute_bounds=true`,
     token
   )
   const imgUrl = data.images && data.images[nodeId]
@@ -72,7 +74,7 @@ export async function renderFigmaNodes(fileKey, token, nodeIds, scale = 2) {
   const API_BATCH = 10
   for (let i = 0; i < nodeIds.length; i += API_BATCH) {
     const chunk = nodeIds.slice(i, i + API_BATCH)
-    const ids = chunk.join(',')
+    const ids = chunk.map((id) => encodeURIComponent(id)).join(',')
     const data = await figmaGet(
       `/images/${fileKey}?ids=${ids}&format=png&scale=${scale}&use_absolute_bounds=true`,
       token
