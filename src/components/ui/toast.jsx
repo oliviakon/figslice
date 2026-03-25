@@ -17,8 +17,8 @@ export function Toast({ message }) {
     <div
       className={cn(
         'fixed bottom-5 right-5 z-50 rounded-lg px-5 py-3',
-        'bg-zinc-100 text-zinc-900 text-sm font-medium',
-        'shadow-2xl shadow-black/40',
+        'bg-themed-fg text-themed-bg text-sm font-medium',
+        'shadow-2xl',
         'transition-all duration-300',
         message ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'
       )}

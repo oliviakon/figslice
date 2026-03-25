@@ -6,17 +6,17 @@ import { StepBadge } from '@/components/ui/badge'
 
 function ResultCard({ image, idx, onDownload }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-white/[0.06] transition-colors hover:border-white/[0.1]">
-      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-themed-border transition-colors hover:border-themed-border-strong">
+      <div className="flex items-center justify-between gap-3 border-b border-themed-border px-4 py-3">
         <span className="text-sm font-semibold text-violet-400">{image.name}</span>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-zinc-600">{image.filename}</span>
+          <span className="font-mono text-[11px] text-themed-muted">{image.filename}</span>
           <Button variant="ghost" size="sm" onClick={() => onDownload(idx)}>
             <Download size={13} />
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto bg-black/30 p-3">
+      <div className="overflow-x-auto bg-themed-subtle p-3">
         <img src={image.dataUrl} alt={image.name} className="block w-full rounded" loading="lazy" />
       </div>
     </div>
@@ -24,7 +24,6 @@ function ResultCard({ image, idx, onDownload }) {
 }
 
 export function ResultsStep({ images, onDownloadSingle, onDownloadZip }) {
-  // Group by section (memoized to avoid recomputing on every render)
   const resultsBySection = useMemo(() => {
     const groups = {}
     images.forEach((f, i) => {
@@ -35,7 +34,7 @@ export function ResultsStep({ images, onDownloadSingle, onDownloadZip }) {
   }, [images])
 
   return (
-    <Card className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <Card className="animate-in">
       <CardHeader>
         <StepBadge step={3} variant="success" />
         <CardTitle>Done</CardTitle>
@@ -43,9 +42,9 @@ export function ResultsStep({ images, onDownloadSingle, onDownloadZip }) {
 
       <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.04] px-4 py-3.5">
         <Check size={16} className="mt-0.5 shrink-0 text-emerald-400" />
-        <div className="text-[13px] leading-relaxed text-zinc-400">
+        <div className="text-[13px] leading-relaxed text-themed-fg-secondary">
           <p>
-            <strong className="text-zinc-200">{images.length}</strong> flow screenshots ready.
+            <strong className="text-themed-fg">{images.length}</strong> flow screenshots ready.
           </p>
           <p className="mt-0.5">Download individually or grab them all as a ZIP.</p>
         </div>
@@ -64,7 +63,7 @@ export function ResultsStep({ images, onDownloadSingle, onDownloadZip }) {
       <div className="flex flex-col gap-4">
         {Object.entries(resultsBySection).map(([sec, files]) => (
           <div key={sec}>
-            <h3 className="mb-3 border-b border-white/[0.06] pb-2 text-[15px] font-semibold text-zinc-200">
+            <h3 className="mb-3 border-b border-themed-border pb-2 text-[15px] font-semibold text-themed-fg">
               {sec}
             </h3>
             <div className="flex flex-col gap-4">

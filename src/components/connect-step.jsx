@@ -18,30 +18,30 @@ function TokenGuide() {
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {open && (
-        <ol className="mt-2.5 space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 text-[12.5px] leading-relaxed text-zinc-400">
+        <ol className="mt-2.5 space-y-2 rounded-lg border border-themed-border bg-themed-subtle px-4 py-3 text-[12.5px] leading-relaxed text-themed-muted">
           <li>
             <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">1</span>
-            Open Figma and tap your <strong className="text-zinc-300">profile picture</strong> (top-left corner)
+            Open Figma and tap your <strong className="text-themed-fg-secondary">profile picture</strong> (top-left corner)
           </li>
           <li>
             <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">2</span>
-            Go to <strong className="text-zinc-300">Settings</strong>
+            Go to <strong className="text-themed-fg-secondary">Settings</strong>
           </li>
           <li>
             <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">3</span>
-            Click the <strong className="text-zinc-300">Security</strong> tab
+            Click the <strong className="text-themed-fg-secondary">Security</strong> tab
           </li>
           <li>
             <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">4</span>
-            Scroll to <strong className="text-zinc-300">Personal access tokens</strong> and hit <strong className="text-zinc-300">Generate new token</strong>
+            Scroll to <strong className="text-themed-fg-secondary">Personal access tokens</strong> and hit <strong className="text-themed-fg-secondary">Generate new token</strong>
           </li>
           <li>
             <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">5</span>
-            Set expiry to whatever you like, and under scopes select <strong className="text-zinc-300">All</strong> (or at minimum File content: Read)
+            Set expiry to whatever you like, and under scopes select <strong className="text-themed-fg-secondary">All</strong> (or at minimum File content: Read)
           </li>
           <li>
             <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">6</span>
-            Copy the token <strong className="text-zinc-300">immediately</strong> &mdash; you won&apos;t see it again! Paste it below.
+            Copy the token <strong className="text-themed-fg-secondary">immediately</strong> &mdash; you won&apos;t see it again! Paste it below.
           </li>
         </ol>
       )}
@@ -68,8 +68,8 @@ export function ConnectStep({
         <CardTitle>Connect to Figma</CardTitle>
       </CardHeader>
 
-      <label className="mb-1.5 block text-[13px] font-medium text-zinc-400">
-        Project name <span className="font-normal text-zinc-600">(used for ZIP filename)</span>
+      <label className="mb-1.5 block text-[13px] font-medium text-themed-muted">
+        Project name <span className="font-normal opacity-60">(used for ZIP filename)</span>
       </label>
       <Input
         type="text"
@@ -84,16 +84,16 @@ export function ConnectStep({
             <button
               key={p.name}
               onClick={() => onProjectChange(p.name)}
-              className="cursor-pointer rounded-full border border-white/[0.06] px-3 py-1 text-xs text-zinc-500 transition-all hover:border-white/[0.12] hover:text-zinc-300"
+              className="cursor-pointer rounded-full border border-themed-border px-3 py-1 text-xs text-themed-muted transition-all hover:border-themed-border-strong hover:text-themed-fg-secondary"
             >
               {p.name}
-              <span className="ml-1 text-zinc-600">{p.count}</span>
+              <span className="ml-1 opacity-60">{p.count}</span>
             </button>
           ))}
         </div>
       )}
 
-      <label className="mb-1.5 block text-[13px] font-medium text-zinc-400">
+      <label className="mb-1.5 block text-[13px] font-medium text-themed-muted">
         Figma URL or file key
       </label>
       <Input
@@ -103,7 +103,7 @@ export function ConnectStep({
         placeholder="https://figma.com/design/abc123/My-File?node-id=..."
       />
 
-      <label className="mb-1.5 block text-[13px] font-medium text-zinc-400">
+      <label className="mb-1.5 block text-[13px] font-medium text-themed-muted">
         Personal access token
       </label>
       <Input
@@ -115,7 +115,7 @@ export function ConnectStep({
 
       <TokenGuide />
 
-      <div className="flex items-start gap-2 rounded-lg border border-white/[0.04] bg-white/[0.01] px-3.5 py-2.5 text-[11.5px] text-zinc-500">
+      <div className="flex items-start gap-2 rounded-lg border border-themed-border bg-themed-subtle px-3.5 py-2.5 text-[11.5px] text-themed-muted">
         <Lock size={13} className="mt-px shrink-0" />
         Your token is stored in your browser only and sent directly to Figma&apos;s API. No server
         involved.

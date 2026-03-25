@@ -22,7 +22,6 @@ export function ManualDrop({ toast }) {
     reader.readAsDataURL(file)
   }, [toast])
 
-  // Global paste listener
   useEffect(() => {
     function onPaste(e) {
       if (document.activeElement.tagName === 'INPUT') return
@@ -48,12 +47,10 @@ export function ManualDrop({ toast }) {
   }
 
   return (
-    <div>
-      <div className="mb-3 border-t border-white/[0.04] pt-7">
-        <h3 className="mb-2.5 text-[13px] font-medium text-zinc-500">
-          Or paste / drop individual screenshots
-        </h3>
-      </div>
+    <div className="mt-8 border-t border-themed-border pt-7">
+      <h3 className="mb-2.5 text-[13px] font-medium text-themed-muted">
+        Or paste / drop individual screenshots
+      </h3>
 
       <div
         onDragOver={(e) => {
@@ -71,15 +68,15 @@ export function ManualDrop({ toast }) {
         className={`rounded-xl border border-dashed p-5 text-center transition-colors ${
           dragActive
             ? 'border-violet-500/40 bg-violet-500/[0.03]'
-            : 'border-white/[0.06] bg-white/[0.01]'
+            : 'border-themed-border bg-themed-subtle'
         }`}
       >
-        <p className="text-[13px] text-zinc-600">
-          <kbd className="rounded border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 font-mono text-[11px] text-zinc-500">
+        <p className="text-[13px] text-themed-muted">
+          <kbd className="rounded border border-themed-border bg-themed-surface px-1.5 py-0.5 font-mono text-[11px] text-themed-fg-secondary">
             Cmd+Shift+Ctrl+4
           </kbd>{' '}
           to screenshot, then{' '}
-          <kbd className="rounded border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 font-mono text-[11px] text-zinc-500">
+          <kbd className="rounded border border-themed-border bg-themed-surface px-1.5 py-0.5 font-mono text-[11px] text-themed-fg-secondary">
             Cmd+V
           </kbd>{' '}
           here
@@ -94,7 +91,7 @@ export function ManualDrop({ toast }) {
                 key={i}
                 src={img.dataUrl}
                 alt={img.filename}
-                className="h-20 rounded border border-white/[0.08]"
+                className="h-20 rounded border border-themed-border"
               />
             ))}
           </div>
