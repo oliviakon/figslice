@@ -32,12 +32,23 @@ async function figmaGet(path, token, retries = 3) {
     if (!r.ok) {
       if (r.status === 403) throw new Error('Invalid token or no access to this file')
       const body = await r.text().catch(() => '')
+      // Surface render timeouts as a special error so callers can retry at lower scale
+      if (r.status === 400 && body.includes('Render timeout')) {
+        throw new RenderTimeoutError(`Render timeout for ${path}`)
+      }
       console.error(`Figma API ${r.status}:`, path, body)
       throw new Error(`Figma API error ${r.status}${body ? ': ' + body.slice(0, 200) : ''}`)
     }
     return r.json()
   }
   throw new Error('Figma rate limit exceeded after retries. Wait a moment and try again.')
+}
+
+export class RenderTimeoutError extends Error {
+  constructor(msg) {
+    super(msg)
+    this.name = 'RenderTimeoutError'
+  }
 }
 
 export async function fetchFigmaFile(fileKey, token, nodeId) {
@@ -48,19 +59,34 @@ export async function fetchFigmaFile(fileKey, token, nodeId) {
 }
 
 /**
- * Render a single Figma node as PNG. Returns a Blob.
+ * Render a single Figma node as PNG. Returns { blob, scale }.
+ * Automatically retries at lower scales if Figma times out on large nodes.
  */
 export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
-  const data = await figmaGet(
-    `/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&format=png&scale=${scale}&use_absolute_bounds=true`,
-    token
-  )
-  const imgUrl = data.images && data.images[nodeId]
-  if (!imgUrl)
-    throw new Error(`Figma returned no image for node ${nodeId}. Error: ${data.err || 'unknown'}`)
-  const r = await fetch(imgUrl)
-  if (!r.ok) throw new Error('Failed to download rendered image')
-  return r.blob()
+  const scalesToTry = scale === 2 ? [2, 1.5, 1] : [scale]
+
+  for (const s of scalesToTry) {
+    try {
+      const data = await figmaGet(
+        `/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&format=png&scale=${s}&use_absolute_bounds=true`,
+        token
+      )
+      const imgUrl = data.images && data.images[nodeId]
+      if (!imgUrl)
+        throw new Error(`Figma returned no image for node ${nodeId}. Error: ${data.err || 'unknown'}`)
+      const r = await fetch(imgUrl)
+      if (!r.ok) throw new Error('Failed to download rendered image')
+      const blob = await r.blob()
+      if (s < scale) console.warn(`Rendered ${nodeId} at ${s}x (reduced from ${scale}x due to timeout)`)
+      return { blob, scale: s }
+    } catch (e) {
+      if (e instanceof RenderTimeoutError && s !== scalesToTry[scalesToTry.length - 1]) {
+        console.warn(`Render timeout at ${s}x for ${nodeId}, retrying at lower scale...`)
+        continue
+      }
+      throw e
+    }
+  }
 }
 
 /**
@@ -69,16 +95,30 @@ export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
  */
 export async function renderFigmaNodes(fileKey, token, nodeIds, scale = 2) {
   const results = new Map()
+  const scalesToTry = scale === 2 ? [2, 1.5, 1] : [scale]
 
   // Figma API limits IDs per request — chunk into batches of 10
   const API_BATCH = 10
   for (let i = 0; i < nodeIds.length; i += API_BATCH) {
     const chunk = nodeIds.slice(i, i + API_BATCH)
     const ids = chunk.map((id) => encodeURIComponent(id)).join(',')
-    const data = await figmaGet(
-      `/images/${fileKey}?ids=${ids}&format=png&scale=${scale}&use_absolute_bounds=true`,
-      token
-    )
+    let data = null
+    for (const s of scalesToTry) {
+      try {
+        data = await figmaGet(
+          `/images/${fileKey}?ids=${ids}&format=png&scale=${s}&use_absolute_bounds=true`,
+          token
+        )
+        break
+      } catch (e) {
+        if (e instanceof RenderTimeoutError && s !== scalesToTry[scalesToTry.length - 1]) {
+          console.warn(`Batch render timeout at ${s}x, retrying at lower scale...`)
+          continue
+        }
+        throw e
+      }
+    }
+    if (!data) continue
     const images = data.images || {}
 
     // Download image URLs with concurrency limit

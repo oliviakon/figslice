@@ -90,21 +90,21 @@ export function useRenderSlice() {
         let sb = { ...sec.bounds }
 
         onProgress?.(`Rendering section "${sec.name}"...`)
-        const imgBlob = await renderFigmaNode(fileKey, token, sid, 2)
+        const { blob: imgBlob, scale: actualScale } = await renderFigmaNode(fileKey, token, sid, 2)
         const img = await createImageBitmap(imgBlob)
         const imgW = img.width, imgH = img.height
 
         let scaleX = imgW / sb.w, scaleY = imgH / sb.h
 
         // Handle render size mismatch
-        if (Math.abs(scaleX - 2.0) > 0.1 || Math.abs(scaleY - 2.0) > 0.1) {
+        if (Math.abs(scaleX - actualScale) > 0.1 || Math.abs(scaleY - actualScale) > 0.1) {
           const allX = flows.map((f) => f.x).concat(sb.x)
           const allY = flows.map((f) => f.y).concat(sb.y)
           const allR = flows.map((f) => f.x + f.w).concat(sb.x + sb.w)
           const allB = flows.map((f) => f.y + f.h).concat(sb.y + sb.h)
           const estX = Math.min(...allX), estY = Math.min(...allY)
           const estW = Math.max(...allR) - estX, estH = Math.max(...allB) - estY
-          if (Math.abs(imgW / estW - 2.0) < Math.abs(scaleX - 2.0)) {
+          if (Math.abs(imgW / estW - actualScale) < Math.abs(scaleX - actualScale)) {
             sb = { x: estX, y: estY, w: estW, h: estH }
             scaleX = imgW / estW
             scaleY = imgH / estH
