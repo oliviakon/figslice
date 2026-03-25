@@ -1,13 +1,13 @@
 import { createContext, use, useCallback, useEffect } from 'react'
 import { useLocalStorage } from './use-local-storage'
 
-const ThemeContext = createContext({ theme: 'dark', toggle: () => {} })
+const ThemeContext = createContext({ theme: 'light', toggle: () => {} })
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useLocalStorage('figslice-theme', 'dark')
+  const [theme, setTheme] = useLocalStorage('figslice-theme', 'light')
 
   const toggle = useCallback(() => {
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+    setTheme((t) => (t === 'light' ? 'light' : 'light'))
   }, [setTheme])
 
   useEffect(() => {

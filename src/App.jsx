@@ -12,68 +12,56 @@ import { useDownloads } from '@/hooks/use-downloads'
 
 function Sidebar() {
   return (
-    <aside className="lg:sticky lg:top-8 lg:self-start">
-      <div className="mb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600/15">
-              <Scissors size={20} className="text-violet-400" />
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-themed-fg">figslice</h1>
+    <aside className="sticky top-8 self-start">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/15">
+            <Scissors size={16} className="text-violet-400" />
           </div>
-          <ThemeToggle />
+          <h1 className="text-xl font-bold tracking-tight text-themed-fg">figslice</h1>
         </div>
-        <p className="text-[14.5px] leading-relaxed text-themed-fg-secondary">
-          Turn Figma pages into flow screenshots. Point it at a section and get one cropped
-          screenshot per flow &mdash; ready to share, paste into docs, or feed to Claude.
-        </p>
+        <ThemeToggle />
       </div>
 
-      <div className="space-y-4">
-        <div className="rounded-xl border border-themed-border bg-themed-surface px-5 py-4">
-          <p className="mb-3 text-[13px] font-semibold text-themed-fg">How it works</p>
-          <div className="space-y-3 text-[13px] leading-relaxed text-themed-muted">
-            <div className="flex gap-3">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-violet-600/15 text-[11px] font-bold text-violet-400">1</span>
-              <span><strong className="text-themed-fg-secondary">Paste a Figma URL</strong> &mdash; link to a page or a specific section/frame</span>
+      <p className="mb-6 text-[13px] leading-relaxed text-themed-muted">
+        Turn Figma pages into flow screenshots. One cropped screenshot per flow &mdash; ready to share or feed to Claude.
+      </p>
+
+      <nav className="space-y-3">
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-themed-muted uppercase">How it works</p>
+          <div className="space-y-2 text-[12px] leading-relaxed text-themed-muted">
+            <div className="flex gap-2">
+              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-violet-600/15 text-[9px] font-bold text-violet-400">1</span>
+              <span><strong className="text-themed-fg-secondary">Paste URL</strong> &mdash; page or section</span>
             </div>
-            <div className="flex gap-3">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-violet-600/15 text-[11px] font-bold text-violet-400">2</span>
-              <span><strong className="text-themed-fg-secondary">Review detected flows</strong> &mdash; frames are grouped by title cards on the left. Check what you need</span>
+            <div className="flex gap-2">
+              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-violet-600/15 text-[9px] font-bold text-violet-400">2</span>
+              <span><strong className="text-themed-fg-secondary">Review flows</strong> &mdash; check what you need</span>
             </div>
-            <div className="flex gap-3">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-violet-600/15 text-[11px] font-bold text-violet-400">3</span>
-              <span><strong className="text-themed-fg-secondary">Render &amp; download</strong> &mdash; each flow becomes one screenshot. Download individually or as a ZIP</span>
+            <div className="flex gap-2">
+              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-violet-600/15 text-[9px] font-bold text-violet-400">3</span>
+              <span><strong className="text-themed-fg-secondary">Download</strong> &mdash; ZIP or individual PNGs</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-themed-border bg-themed-surface px-5 py-4">
-          <p className="mb-3 text-[13px] font-semibold text-themed-fg">Figma structure tips</p>
-          <ul className="space-y-2 text-[13px] leading-relaxed text-themed-muted">
-            <li className="flex gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500/50" />
-              Use <strong className="text-themed-fg-secondary">Sections</strong> in Figma to group related flows &mdash; each renders as one batch
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500/50" />
-              Put a <strong className="text-themed-fg-secondary">title card</strong> as the leftmost frame in each row &mdash; used to split flows
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500/50" />
-              Lay screens <strong className="text-themed-fg-secondary">left to right</strong> next to each title card
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500/50" />
-              Or select a specific <strong className="text-themed-fg-secondary">node-id</strong> in the URL to capture one frame
-            </li>
+        <hr className="border-themed-border" />
+
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-themed-muted uppercase">Figma tips</p>
+          <ul className="space-y-1.5 text-[12px] leading-relaxed text-themed-muted">
+            <li>Use <strong className="text-themed-fg-secondary">Sections</strong> to group flows</li>
+            <li>Leftmost frame = <strong className="text-themed-fg-secondary">title card</strong> (flow divider)</li>
+            <li>Screens go <strong className="text-themed-fg-secondary">left &rarr; right</strong></li>
+            <li>Or use a <strong className="text-themed-fg-secondary">node-id</strong> URL for one frame</li>
           </ul>
         </div>
+      </nav>
 
-        <p className="text-[11.5px] text-themed-muted">
-          Runs entirely in your browser. Your Figma token never touches a server.
-        </p>
-      </div>
+      <p className="mt-6 text-[10.5px] text-themed-muted/60">
+        Runs in-browser. Token never leaves your machine.
+      </p>
     </aside>
   )
 }
@@ -176,13 +164,26 @@ export default function App() {
   }, [])
 
   return (
-    <div className="relative z-10 mx-auto max-w-[1280px] px-5 py-8 lg:px-8">
-      <div className="lg:grid lg:grid-cols-[380px_1fr] lg:gap-10">
-        {/* Left: brand, how-it-works, tips */}
+    <div className="relative z-10 flex min-h-screen">
+      {/* Left sidebar — flush to the edge */}
+      <div className="hidden w-[280px] shrink-0 border-r border-themed-border px-6 py-8 lg:block">
         <Sidebar />
+      </div>
 
-        {/* Right: steps */}
-        <main className="mt-8 space-y-4 lg:mt-0">
+      {/* Mobile header */}
+      <div className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between border-b border-themed-border bg-themed-bg/90 px-5 py-3 backdrop-blur-sm lg:hidden">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/15">
+            <Scissors size={16} className="text-violet-400" />
+          </div>
+          <span className="text-lg font-bold tracking-tight text-themed-fg">figslice</span>
+        </div>
+        <ThemeToggle />
+      </div>
+
+      {/* Right: centred steps */}
+      <main className="flex-1 px-5 pt-20 pb-8 lg:px-0 lg:pt-8">
+        <div className="mx-auto max-w-[680px] space-y-4 lg:px-8">
           <ConnectStep
             project={project}
             onProjectChange={setProject}
@@ -221,8 +222,8 @@ export default function App() {
           )}
 
           <ManualDrop toast={toast.show} />
-        </main>
-      </div>
+        </div>
+      </main>
 
       <Toast message={toast.msg} />
     </div>
