@@ -16,15 +16,26 @@ export function parseFigmaUrl(url) {
   return { fileKey, nodeId }
 }
 
-async function figmaGet(path, token) {
-  const r = await fetch(`https://api.figma.com/v1${path}`, {
-    headers: { 'X-FIGMA-TOKEN': token },
-  })
-  if (!r.ok) {
-    if (r.status === 403) throw new Error('Invalid token or no access to this file')
-    throw new Error(`Figma API error ${r.status}`)
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function figmaGet(path, token, retries = 3) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const r = await fetch(`https://api.figma.com/v1${path}`, {
+      headers: { 'X-FIGMA-TOKEN': token },
+    })
+    if (r.status === 429) {
+      const wait = Math.min(2000 * 2 ** attempt, 15000)
+      console.warn(`Figma rate limited, retrying in ${wait}ms...`)
+      await sleep(wait)
+      continue
+    }
+    if (!r.ok) {
+      if (r.status === 403) throw new Error('Invalid token or no access to this file')
+      throw new Error(`Figma API error ${r.status}`)
+    }
+    return r.json()
   }
-  return r.json()
+  throw new Error('Figma rate limit exceeded after retries. Wait a moment and try again.')
 }
 
 export async function fetchFigmaFile(fileKey, token, nodeId) {
@@ -34,6 +45,9 @@ export async function fetchFigmaFile(fileKey, token, nodeId) {
   return figmaGet(`/files/${fileKey}?depth=2`, token)
 }
 
+/**
+ * Render a single Figma node as PNG. Returns a Blob.
+ */
 export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
   const data = await figmaGet(
     `/images/${fileKey}?ids=${nodeId}&format=png&scale=${scale}&use_absolute_bounds=true`,
@@ -45,6 +59,39 @@ export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
   const r = await fetch(imgUrl)
   if (!r.ok) throw new Error('Failed to download rendered image')
   return r.blob()
+}
+
+/**
+ * Render multiple Figma nodes in a SINGLE API call.
+ * Returns a Map of nodeId -> Blob.
+ */
+export async function renderFigmaNodes(fileKey, token, nodeIds, scale = 2) {
+  const ids = nodeIds.join(',')
+  const data = await figmaGet(
+    `/images/${fileKey}?ids=${ids}&format=png&scale=${scale}&use_absolute_bounds=true`,
+    token
+  )
+  const images = data.images || {}
+  const results = new Map()
+
+  // Download all image URLs (with concurrency limit to avoid browser limits)
+  const BATCH_SIZE = 4
+  const entries = Object.entries(images).filter(([, url]) => url)
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE)
+    const blobs = await Promise.all(
+      batch.map(async ([nid, url]) => {
+        const r = await fetch(url)
+        if (!r.ok) return [nid, null]
+        return [nid, await r.blob()]
+      })
+    )
+    for (const [nid, blob] of blobs) {
+      if (blob) results.set(nid, blob)
+    }
+  }
+
+  return results
 }
 
 // ── Frame/section extraction ──

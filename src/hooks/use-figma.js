@@ -3,6 +3,7 @@ import {
   parseFigmaUrl,
   fetchFigmaFile,
   renderFigmaNode,
+  renderFigmaNodes,
   extractPages,
   groupIntoFlows,
   sanitize,
@@ -144,61 +145,73 @@ export function useRenderSlice() {
         img.close()
       }
 
-      // ── Render loose flows (no parent section) — render each individually ──
-      // These frames aren't inside a Figma SECTION, so we render each flow's
-      // frames by finding the nearest parent node, or render each frame directly.
-      for (const flow of looseFlows) {
-        flowNum++
-        onProgress?.(`Rendering "${flow.name}" (${flowNum}/${totalFlows})...`)
-
-        // Find the original section to get frame IDs for rendering
-        const origSection = sectionsWithFlows.find((s) => s.name === flow.section)
-        const origFlows = origSection?.flows || []
-        const origFlow = origFlows.find((f) => f.title === flow.name)
-        const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
-
-        // Render each frame individually and stitch them side by side
-        if (frameIds.length === 0) continue
-
-        // Use the first frame's parent or render all frames via the node-id approach
-        // Render all frames in parallel for speed
-        const frameBlobs = await Promise.all(
-          frameIds.map((fid) => renderFigmaNode(fileKey, token, fid, 2))
-        )
-        const frameBitmaps = await Promise.all(frameBlobs.map((b) => createImageBitmap(b)))
-
-        // Calculate total canvas size (stitch horizontally with gap)
-        const GAP = 16
-        let totalW = 0
-        let maxH = 0
-        for (const bmp of frameBitmaps) {
-          totalW += bmp.width
-          if (bmp.height > maxH) maxH = bmp.height
-        }
-        totalW += GAP * (frameBitmaps.length - 1)
-
-        const canvas = document.createElement('canvas')
-        canvas.width = totalW
-        canvas.height = maxH
-        const ctx = canvas.getContext('2d')
-
-        let xOffset = 0
-        for (const bmp of frameBitmaps) {
-          ctx.drawImage(bmp, xOffset, 0)
-          xOffset += bmp.width + GAP
-          bmp.close()
+      // ── Render loose flows (no parent section) ──
+      // These frames aren't inside a Figma SECTION. We batch all frame IDs
+      // across all loose flows into ONE Figma API call, then stitch per flow.
+      if (looseFlows.length > 0) {
+        // Collect all frame IDs we need, grouped by flow
+        const flowFrameIds = []
+        for (const flow of looseFlows) {
+          const origSection = sectionsWithFlows.find((s) => s.name === flow.section)
+          const origFlows = origSection?.flows || []
+          const origFlow = origFlows.find((f) => f.title === flow.name)
+          const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
+          flowFrameIds.push({ flow, frameIds })
         }
 
-        const [blob, dataUrl] = await Promise.all([
-          new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
-          Promise.resolve(canvas.toDataURL('image/png')),
-        ])
+        // Single batch API call for ALL frame IDs
+        const allIds = flowFrameIds.flatMap((f) => f.frameIds)
+        if (allIds.length > 0) {
+          onProgress?.(`Rendering ${allIds.length} frames...`)
+          const blobMap = await renderFigmaNodes(fileKey, token, allIds, 2)
 
-        const nameSlug = sanitize(flow.name)
-        const num = String(flowNum).padStart(2, '0')
-        const filename = `${num}-${nameSlug}.png`
+          for (const { flow, frameIds } of flowFrameIds) {
+            if (frameIds.length === 0) continue
+            flowNum++
+            onProgress?.(`Stitching "${flow.name}" (${flowNum}/${totalFlows})...`)
 
-        images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
+            // Get bitmaps in order
+            const frameBitmaps = []
+            for (const fid of frameIds) {
+              const blob = blobMap.get(fid)
+              if (blob) frameBitmaps.push(await createImageBitmap(blob))
+            }
+            if (frameBitmaps.length === 0) continue
+
+            // Stitch horizontally
+            const GAP = 16
+            let totalW = 0
+            let maxH = 0
+            for (const bmp of frameBitmaps) {
+              totalW += bmp.width
+              if (bmp.height > maxH) maxH = bmp.height
+            }
+            totalW += GAP * (frameBitmaps.length - 1)
+
+            const canvas = document.createElement('canvas')
+            canvas.width = totalW
+            canvas.height = maxH
+            const ctx = canvas.getContext('2d')
+
+            let xOffset = 0
+            for (const bmp of frameBitmaps) {
+              ctx.drawImage(bmp, xOffset, 0)
+              xOffset += bmp.width + GAP
+              bmp.close()
+            }
+
+            const [blob, dataUrl] = await Promise.all([
+              new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
+              Promise.resolve(canvas.toDataURL('image/png')),
+            ])
+
+            const nameSlug = sanitize(flow.name)
+            const num = String(flowNum).padStart(2, '0')
+            const filename = `${num}-${nameSlug}.png`
+
+            images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
+          }
+        }
       }
 
       return images
