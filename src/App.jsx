@@ -116,17 +116,56 @@ export default function App() {
   return (
     <div className="relative z-10 mx-auto max-w-[1100px] px-5 py-8">
       {/* Header */}
-      <div className="mb-1.5 flex items-center gap-2.5">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-violet-500">
-          <path d="M12 2c-.5 0-1 .1-1.2.3-.3.2-.5.5-.6.8L9 6c-.5 1.2-.2 2.5.5 3.5.2.3.1.6-.1.8L7.5 12c-.5.5-.7 1.2-.7 1.9 0 2.5 1.8 5.5 4.2 7.3.3.2.7.3 1 .3s.7-.1 1-.3c2.4-1.8 4.2-4.8 4.2-7.3 0-.7-.2-1.4-.7-1.9l-1.9-1.7c-.2-.2-.3-.5-.1-.8.7-1 1-2.3.5-3.5l-1.2-2.9c-.1-.3-.3-.6-.6-.8C13 2.1 12.5 2 12 2z" fill="currentColor" opacity="0.85"/>
-          <path d="M12 2c0 0 .8-.2 1.5.8.4.5.5 1.2.3 1.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
+      <div className="mb-3 flex items-center gap-3">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="text-violet-500">
+          <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          <line x1="9" y1="4" x2="9" y2="20" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+          <line x1="15" y1="4" x2="15" y2="20" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+          <rect x="3.5" y="6" width="4" height="5" rx="0.5" fill="currentColor" opacity="0.25" />
+          <rect x="10.5" y="6" width="3" height="5" rx="0.5" fill="currentColor" opacity="0.25" />
+          <rect x="16.5" y="6" width="3" height="5" rx="0.5" fill="currentColor" opacity="0.25" />
         </svg>
-        <h1 className="text-[22px] font-bold tracking-tight">figslice</h1>
+        <h1 className="text-3xl font-bold tracking-tight">figslice</h1>
       </div>
-      <p className="mb-7 text-[13.5px] leading-relaxed text-zinc-500">
-        Auto-slice Figma pages into flow screenshots. Runs entirely in your browser &mdash; nothing
-        leaves your machine.
-      </p>
+
+      <div className="mb-8 max-w-2xl space-y-3">
+        <p className="text-[14px] leading-relaxed text-zinc-400">
+          Turn Figma pages into flow screenshots automatically. Point it at a Figma section and get
+          one cropped screenshot per flow &mdash; ready to share, paste into docs, or feed to Claude.
+        </p>
+
+        <div className="rounded-lg border border-white/[0.05] bg-white/[0.015] px-4 py-3">
+          <p className="mb-2 text-[12.5px] font-medium text-zinc-300">How it works</p>
+          <div className="grid gap-2 text-[12.5px] leading-relaxed text-zinc-500">
+            <div className="flex gap-2.5">
+              <span className="mt-px shrink-0 text-violet-500">1.</span>
+              <span><strong className="text-zinc-400">Paste a Figma URL</strong> &mdash; link to a page or a specific section/frame</span>
+            </div>
+            <div className="flex gap-2.5">
+              <span className="mt-px shrink-0 text-violet-500">2.</span>
+              <span><strong className="text-zinc-400">Review detected flows</strong> &mdash; figslice groups frames into flows using title cards on the left as dividers. Check/uncheck what you need</span>
+            </div>
+            <div className="flex gap-2.5">
+              <span className="mt-px shrink-0 text-violet-500">3.</span>
+              <span><strong className="text-zinc-400">Render &amp; download</strong> &mdash; each flow becomes one screenshot. Download individually or as a ZIP</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/[0.05] bg-white/[0.015] px-4 py-3">
+          <p className="mb-2 text-[12.5px] font-medium text-zinc-300">Figma structure tips</p>
+          <ul className="space-y-1 text-[12.5px] leading-relaxed text-zinc-500">
+            <li className="flex gap-2"><span className="text-zinc-600">&bull;</span>Use <strong className="text-zinc-400">Sections</strong> in Figma to group related flows &mdash; each section renders as one batch</li>
+            <li className="flex gap-2"><span className="text-zinc-600">&bull;</span>Put a <strong className="text-zinc-400">title card</strong> as the leftmost frame in each row &mdash; figslice uses these to split flows</li>
+            <li className="flex gap-2"><span className="text-zinc-600">&bull;</span>Lay screens out <strong className="text-zinc-400">left to right</strong> next to each title card</li>
+            <li className="flex gap-2"><span className="text-zinc-600">&bull;</span>Or just select a specific <strong className="text-zinc-400">node-id</strong> in the URL to capture one section</li>
+          </ul>
+        </div>
+
+        <p className="text-[11.5px] text-zinc-600">
+          Runs entirely in your browser. Your Figma token never touches a server.
+        </p>
+      </div>
 
       {/* Step 1 */}
       <ConnectStep
