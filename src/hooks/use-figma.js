@@ -61,28 +61,34 @@ export function useRenderSlice() {
 
       if (!selectedFrames.length) throw new Error('Select at least one flow')
 
+      // Separate flows that belong to real Figma sections (have an ID + bounds)
+      // from loose flows (grouped under "Other" with no section ID).
       const sectionsToRender = sectionsWithFlows
         .filter((s) => sectionIds.has(s.id))
         .map((s) => ({ id: s.id, name: s.name, bounds: s.bounds }))
 
-      onProgress?.(`Rendering ${sectionIds.size} section(s)...`)
-
-      // Group by section for batch rendering
       const bySection = {}
+      const looseFlows = []
       for (const f of selectedFrames) {
-        ;(bySection[f.sectionId] ??= []).push(f)
+        if (f.sectionId) {
+          ;(bySection[f.sectionId] ??= []).push(f)
+        } else {
+          looseFlows.push(f)
+        }
       }
-      const sectionMap = new Map(sectionsToRender.map((s) => [s.id, s]))
 
+      const sectionMap = new Map(sectionsToRender.map((s) => [s.id, s]))
+      const totalFlows = selectedFrames.length
       const images = []
       let flowNum = 0
 
+      // ── Render flows inside real Figma sections (batch by section) ──
       for (const [sid, flows] of Object.entries(bySection)) {
         const sec = sectionMap.get(sid)
         if (!sec?.bounds) continue
         let sb = { ...sec.bounds }
 
-        onProgress?.(`Rendering "${sec.name}"...`)
+        onProgress?.(`Rendering section "${sec.name}"...`)
         const imgBlob = await renderFigmaNode(fileKey, token, sid, 2)
         const img = await createImageBitmap(imgBlob)
         const imgW = img.width, imgH = img.height
@@ -106,7 +112,7 @@ export function useRenderSlice() {
 
         for (const flow of flows) {
           flowNum++
-          onProgress?.(`Cropping "${flow.name}" (${flowNum}/${selectedFrames.length})...`)
+          onProgress?.(`Cropping "${flow.name}" (${flowNum}/${totalFlows})...`)
 
           let px = Math.round((flow.x - sb.x) * scaleX)
           let py = Math.round((flow.y - sb.y) * scaleY)
@@ -136,6 +142,63 @@ export function useRenderSlice() {
           images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
         }
         img.close()
+      }
+
+      // ── Render loose flows (no parent section) — render each individually ──
+      // These frames aren't inside a Figma SECTION, so we render each flow's
+      // frames by finding the nearest parent node, or render each frame directly.
+      for (const flow of looseFlows) {
+        flowNum++
+        onProgress?.(`Rendering "${flow.name}" (${flowNum}/${totalFlows})...`)
+
+        // Find the original section to get frame IDs for rendering
+        const origSection = sectionsWithFlows.find((s) => s.name === flow.section)
+        const origFlows = origSection?.flows || []
+        const origFlow = origFlows.find((f) => f.title === flow.name)
+        const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
+
+        // Render each frame individually and stitch them side by side
+        if (frameIds.length === 0) continue
+
+        // Use the first frame's parent or render all frames via the node-id approach
+        // Render all frames in parallel for speed
+        const frameBlobs = await Promise.all(
+          frameIds.map((fid) => renderFigmaNode(fileKey, token, fid, 2))
+        )
+        const frameBitmaps = await Promise.all(frameBlobs.map((b) => createImageBitmap(b)))
+
+        // Calculate total canvas size (stitch horizontally with gap)
+        const GAP = 16
+        let totalW = 0
+        let maxH = 0
+        for (const bmp of frameBitmaps) {
+          totalW += bmp.width
+          if (bmp.height > maxH) maxH = bmp.height
+        }
+        totalW += GAP * (frameBitmaps.length - 1)
+
+        const canvas = document.createElement('canvas')
+        canvas.width = totalW
+        canvas.height = maxH
+        const ctx = canvas.getContext('2d')
+
+        let xOffset = 0
+        for (const bmp of frameBitmaps) {
+          ctx.drawImage(bmp, xOffset, 0)
+          xOffset += bmp.width + GAP
+          bmp.close()
+        }
+
+        const [blob, dataUrl] = await Promise.all([
+          new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
+          Promise.resolve(canvas.toDataURL('image/png')),
+        ])
+
+        const nameSlug = sanitize(flow.name)
+        const num = String(flowNum).padStart(2, '0')
+        const filename = `${num}-${nameSlug}.png`
+
+        images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
       }
 
       return images
