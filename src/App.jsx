@@ -53,8 +53,8 @@ function Sidebar() {
           <ul className="space-y-1.5 text-[12px] leading-relaxed text-themed-muted">
             <li>Use <strong className="text-themed-fg-secondary">Sections</strong> to group flows</li>
             <li>Leftmost frame = <strong className="text-themed-fg-secondary">title card</strong> (flow divider)</li>
-            <li>Screens go <strong className="text-themed-fg-secondary">left &rarr; right</strong></li>
-            <li>Or use a <strong className="text-themed-fg-secondary">node-id</strong> URL for one frame</li>
+            <li>Screens go <strong className="text-themed-fg-secondary">left &rarr; right</strong> in a single row</li>
+            <li className="text-themed-muted/70">Heads up: multi-layer flows that branch into multiple rows won&apos;t slice cleanly &mdash; keep flows in <strong className="text-themed-fg-secondary">one horizontal line</strong></li>
           </ul>
         </div>
       </nav>
