@@ -11,7 +11,6 @@ import {
 
 /**
  * TanStack mutation for fetching Figma file structure.
- * Handles loading/error states automatically.
  */
 export function useFetchStructure() {
   return useMutation({
@@ -23,6 +22,123 @@ export function useFetchStructure() {
       return { pages, fileKey, nodeId }
     },
   })
+}
+
+// ── Helpers ──
+
+/**
+ * Crop flows from a rendered section image.
+ * This is the core logic shared by both the full-section and split-section paths.
+ * Returns array of { filename, blob, dataUrl, section, name }.
+ */
+async function cropFlowsFromRender(img, sectionBounds, flows, flowNumStart, totalFlows, onProgress) {
+  const imgW = img.width, imgH = img.height
+  let sb = { ...sectionBounds }
+  let scaleX = imgW / sb.w, scaleY = imgH / sb.h
+
+  // Handle render size mismatch — the rendered image may not match expected scale
+  const expectedScale = Math.max(scaleX, scaleY)
+  if (Math.abs(scaleX - expectedScale) > 0.1 || Math.abs(scaleY - expectedScale) > 0.1) {
+    const allX = flows.map((f) => f.x).concat(sb.x)
+    const allY = flows.map((f) => f.y).concat(sb.y)
+    const allR = flows.map((f) => f.x + f.w).concat(sb.x + sb.w)
+    const allB = flows.map((f) => f.y + f.h).concat(sb.y + sb.h)
+    const estX = Math.min(...allX), estY = Math.min(...allY)
+    const estW = Math.max(...allR) - estX, estH = Math.max(...allB) - estY
+    if (Math.abs(imgW / estW - expectedScale) < Math.abs(scaleX - expectedScale)) {
+      sb = { x: estX, y: estY, w: estW, h: estH }
+      scaleX = imgW / estW
+      scaleY = imgH / estH
+    }
+  }
+
+  const results = []
+  let flowNum = flowNumStart
+
+  for (const flow of flows) {
+    flowNum++
+    onProgress?.(`Cropping "${flow.name}" (${flowNum}/${totalFlows})...`)
+
+    let px = Math.round((flow.x - sb.x) * scaleX)
+    let py = Math.round((flow.y - sb.y) * scaleY)
+    let pw = Math.round(flow.w * scaleX)
+    let ph = Math.round(flow.h * scaleY)
+    px = Math.max(0, px)
+    py = Math.max(0, py)
+    pw = Math.min(pw, imgW - px)
+    ph = Math.min(ph, imgH - py)
+    if (pw <= 0 || ph <= 0) continue
+
+    const canvas = document.createElement('canvas')
+    canvas.width = pw
+    canvas.height = ph
+    canvas.getContext('2d').drawImage(img, px, py, pw, ph, 0, 0, pw, ph)
+
+    const [blob, dataUrl] = await Promise.all([
+      new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
+      Promise.resolve(canvas.toDataURL('image/png')),
+    ])
+
+    const secSlug = sanitize(flow.section || '')
+    const nameSlug = sanitize(flow.name)
+    const num = String(flowNum).padStart(2, '0')
+    const filename = secSlug ? `${num}-${secSlug}--${nameSlug}.png` : `${num}-${nameSlug}.png`
+
+    results.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
+  }
+
+  return { results, flowNum }
+}
+
+/**
+ * Threshold for splitting: if a section's area (in Figma units) exceeds this,
+ * split into smaller render chunks. ~8000x4000 at 2x = 64M pixels, which is
+ * around where Figma starts timing out.
+ */
+const MAX_SECTION_AREA = 25_000_000 // Figma units squared
+
+/**
+ * Split flows into groups that can be rendered without timing out.
+ * Groups flows by proximity (Y position) so each chunk covers a
+ * contiguous vertical band of the section.
+ */
+function splitFlowsIntoChunks(flows, sectionBounds, maxArea) {
+  if (flows.length <= 1) return [flows]
+
+  // Sort by Y position so chunks are contiguous vertical bands
+  const sorted = [...flows].sort((a, b) => a.y - b.y)
+
+  const chunks = []
+  let currentChunk = []
+  let chunkMinX = Infinity, chunkMinY = Infinity, chunkMaxX = -Infinity, chunkMaxY = -Infinity
+
+  for (const flow of sorted) {
+    // Calculate what the bounds would be if we add this flow
+    const newMinX = Math.min(chunkMinX, flow.x)
+    const newMinY = Math.min(chunkMinY, flow.y)
+    const newMaxX = Math.max(chunkMaxX, flow.x + flow.w)
+    const newMaxY = Math.max(chunkMaxY, flow.y + flow.h)
+    const newArea = (newMaxX - newMinX) * (newMaxY - newMinY)
+
+    if (currentChunk.length > 0 && newArea > maxArea) {
+      // Adding this flow would make the chunk too large — start a new one
+      chunks.push(currentChunk)
+      currentChunk = [flow]
+      chunkMinX = flow.x
+      chunkMinY = flow.y
+      chunkMaxX = flow.x + flow.w
+      chunkMaxY = flow.y + flow.h
+    } else {
+      currentChunk.push(flow)
+      chunkMinX = newMinX
+      chunkMinY = newMinY
+      chunkMaxX = newMaxX
+      chunkMaxY = newMaxY
+    }
+  }
+
+  if (currentChunk.length > 0) chunks.push(currentChunk)
+  return chunks
 }
 
 /**
@@ -62,8 +178,6 @@ export function useRenderSlice() {
 
       if (!selectedFrames.length) throw new Error('Select at least one flow')
 
-      // Separate flows that belong to real Figma sections (have an ID + bounds)
-      // from loose flows (grouped under "Other" with no section ID).
       const sectionsToRender = sectionsWithFlows
         .filter((s) => sectionIds.has(s.id))
         .map((s) => ({ id: s.id, name: s.name, bounds: s.bounds }))
@@ -83,73 +197,121 @@ export function useRenderSlice() {
       const images = []
       let flowNum = 0
 
-      // ── Render flows inside real Figma sections (batch by section) ──
+      // ── Render flows inside real Figma sections ──
       for (const [sid, flows] of Object.entries(bySection)) {
         const sec = sectionMap.get(sid)
         if (!sec?.bounds) continue
-        let sb = { ...sec.bounds }
+        const sb = sec.bounds
+        const sectionArea = sb.w * sb.h
 
-        onProgress?.(`Rendering section "${sec.name}"...`)
-        const { blob: imgBlob, scale: actualScale } = await renderFigmaNode(fileKey, token, sid, 2)
-        const img = await createImageBitmap(imgBlob)
-        const imgW = img.width, imgH = img.height
+        // Decide: render whole section, or split into smaller chunks?
+        if (sectionArea <= MAX_SECTION_AREA || flows.length <= 1) {
+          // ── Normal path: render the whole section at once ──
+          onProgress?.(`Rendering section "${sec.name}"...`)
+          const { blob: imgBlob } = await renderFigmaNode(fileKey, token, sid, 2)
+          const img = await createImageBitmap(imgBlob)
 
-        let scaleX = imgW / sb.w, scaleY = imgH / sb.h
+          const { results, flowNum: newFlowNum } = await cropFlowsFromRender(
+            img, sb, flows, flowNum, totalFlows, onProgress
+          )
+          images.push(...results)
+          flowNum = newFlowNum
+          img.close()
+        } else {
+          // ── Split path: section is large, render in chunks ──
+          const chunks = splitFlowsIntoChunks(flows, sb, MAX_SECTION_AREA)
+          onProgress?.(`Section "${sec.name}" is large — splitting into ${chunks.length} render(s)...`)
 
-        // Handle render size mismatch
-        if (Math.abs(scaleX - actualScale) > 0.1 || Math.abs(scaleY - actualScale) > 0.1) {
-          const allX = flows.map((f) => f.x).concat(sb.x)
-          const allY = flows.map((f) => f.y).concat(sb.y)
-          const allR = flows.map((f) => f.x + f.w).concat(sb.x + sb.w)
-          const allB = flows.map((f) => f.y + f.h).concat(sb.y + sb.h)
-          const estX = Math.min(...allX), estY = Math.min(...allY)
-          const estW = Math.max(...allR) - estX, estH = Math.max(...allB) - estY
-          if (Math.abs(imgW / estW - actualScale) < Math.abs(scaleX - actualScale)) {
-            sb = { x: estX, y: estY, w: estW, h: estH }
-            scaleX = imgW / estW
-            scaleY = imgH / estH
+          for (let ci = 0; ci < chunks.length; ci++) {
+            const chunk = chunks[ci]
+            onProgress?.(`Rendering "${sec.name}" part ${ci + 1}/${chunks.length}...`)
+
+            // Render the whole section but at a scale that won't timeout
+            // For chunks, we still render the section node — Figma doesn't support
+            // arbitrary bounding box renders. The auto-retry in renderFigmaNode
+            // handles scale reduction. We just crop a smaller set of flows each time.
+            // Only render once for the first chunk, reuse for subsequent if they
+            // all fit within the same section render.
+            if (ci === 0) {
+              // First chunk — do the section render
+              var sectionImg = null
+              var renderSucceeded = false
+              try {
+                const { blob: imgBlob } = await renderFigmaNode(fileKey, token, sid, 2)
+                sectionImg = await createImageBitmap(imgBlob)
+                renderSucceeded = true
+              } catch {
+                // If even the reduced-scale render fails, fall back to per-frame rendering
+                renderSucceeded = false
+              }
+            }
+
+            if (renderSucceeded && sectionImg) {
+              // Crop this chunk's flows from the section render
+              const { results, flowNum: newFlowNum } = await cropFlowsFromRender(
+                sectionImg, sb, chunk, flowNum, totalFlows, onProgress
+              )
+              images.push(...results)
+              flowNum = newFlowNum
+            } else {
+              // Fallback: render each flow's frames individually
+              for (const flow of chunk) {
+                flowNum++
+                onProgress?.(`Rendering "${flow.name}" individually (${flowNum}/${totalFlows})...`)
+
+                const origSection = sectionsWithFlows.find((s) => s.id === sid)
+                const origFlows = origSection?.flows || []
+                const origFlow = origFlows.find((f) => f.title === flow.name)
+                const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
+                if (frameIds.length === 0) continue
+
+                const blobMap = await renderFigmaNodes(fileKey, token, frameIds, 2)
+                const frameBitmaps = []
+                for (const fid of frameIds) {
+                  const b = blobMap.get(fid)
+                  if (b) frameBitmaps.push(await createImageBitmap(b))
+                }
+                if (frameBitmaps.length === 0) continue
+
+                const GAP = 16
+                let totalW = 0, maxH = 0
+                for (const bmp of frameBitmaps) {
+                  totalW += bmp.width
+                  if (bmp.height > maxH) maxH = bmp.height
+                }
+                totalW += GAP * (frameBitmaps.length - 1)
+
+                const canvas = document.createElement('canvas')
+                canvas.width = totalW
+                canvas.height = maxH
+                const ctx = canvas.getContext('2d')
+                let xOffset = 0
+                for (const bmp of frameBitmaps) {
+                  ctx.drawImage(bmp, xOffset, 0)
+                  xOffset += bmp.width + GAP
+                  bmp.close()
+                }
+
+                const [blob, dataUrl] = await Promise.all([
+                  new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
+                  Promise.resolve(canvas.toDataURL('image/png')),
+                ])
+
+                const secSlug = sanitize(flow.section || '')
+                const nameSlug = sanitize(flow.name)
+                const num = String(flowNum).padStart(2, '0')
+                const filename = secSlug ? `${num}-${secSlug}--${nameSlug}.png` : `${num}-${nameSlug}.png`
+                images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
+              }
+            }
           }
+
+          if (sectionImg) sectionImg.close()
         }
-
-        for (const flow of flows) {
-          flowNum++
-          onProgress?.(`Cropping "${flow.name}" (${flowNum}/${totalFlows})...`)
-
-          let px = Math.round((flow.x - sb.x) * scaleX)
-          let py = Math.round((flow.y - sb.y) * scaleY)
-          let pw = Math.round(flow.w * scaleX)
-          let ph = Math.round(flow.h * scaleY)
-          px = Math.max(0, px)
-          py = Math.max(0, py)
-          pw = Math.min(pw, imgW - px)
-          ph = Math.min(ph, imgH - py)
-          if (pw <= 0 || ph <= 0) continue
-
-          const canvas = document.createElement('canvas')
-          canvas.width = pw
-          canvas.height = ph
-          canvas.getContext('2d').drawImage(img, px, py, pw, ph, 0, 0, pw, ph)
-
-          const [blob, dataUrl] = await Promise.all([
-            new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
-            Promise.resolve(canvas.toDataURL('image/png')),
-          ])
-
-          const secSlug = sanitize(flow.section || '')
-          const nameSlug = sanitize(flow.name)
-          const num = String(flowNum).padStart(2, '0')
-          const filename = secSlug ? `${num}-${secSlug}--${nameSlug}.png` : `${num}-${nameSlug}.png`
-
-          images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
-        }
-        img.close()
       }
 
       // ── Render loose flows (no parent section) ──
-      // These frames aren't inside a Figma SECTION. We batch all frame IDs
-      // across all loose flows into ONE Figma API call, then stitch per flow.
       if (looseFlows.length > 0) {
-        // Collect all frame IDs we need, grouped by flow
         const flowFrameIds = []
         for (const flow of looseFlows) {
           const origSection = sectionsWithFlows.find((s) => s.name === flow.section)
@@ -159,7 +321,6 @@ export function useRenderSlice() {
           flowFrameIds.push({ flow, frameIds })
         }
 
-        // Single batch API call for ALL frame IDs
         const allIds = flowFrameIds.flatMap((f) => f.frameIds)
         if (allIds.length > 0) {
           onProgress?.(`Rendering ${allIds.length} frames...`)
@@ -170,7 +331,6 @@ export function useRenderSlice() {
             flowNum++
             onProgress?.(`Stitching "${flow.name}" (${flowNum}/${totalFlows})...`)
 
-            // Get bitmaps in order
             const frameBitmaps = []
             for (const fid of frameIds) {
               const blob = blobMap.get(fid)
@@ -178,10 +338,8 @@ export function useRenderSlice() {
             }
             if (frameBitmaps.length === 0) continue
 
-            // Stitch horizontally
             const GAP = 16
-            let totalW = 0
-            let maxH = 0
+            let totalW = 0, maxH = 0
             for (const bmp of frameBitmaps) {
               totalW += bmp.width
               if (bmp.height > maxH) maxH = bmp.height
@@ -192,7 +350,6 @@ export function useRenderSlice() {
             canvas.width = totalW
             canvas.height = maxH
             const ctx = canvas.getContext('2d')
-
             let xOffset = 0
             for (const bmp of frameBitmaps) {
               ctx.drawImage(bmp, xOffset, 0)
@@ -208,7 +365,6 @@ export function useRenderSlice() {
             const nameSlug = sanitize(flow.name)
             const num = String(flowNum).padStart(2, '0')
             const filename = `${num}-${nameSlug}.png`
-
             images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
           }
         }
