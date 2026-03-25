@@ -59,11 +59,33 @@ export async function fetchFigmaFile(fileKey, token, nodeId) {
 }
 
 /**
+ * Pick the best starting scale based on estimated pixel area.
+ * Figma tends to timeout when the output image exceeds ~60-70M pixels.
+ * By predicting this upfront, we skip failed attempts at higher scales.
+ */
+function pickStartScale(bounds, maxScale = 2) {
+  if (!bounds || !bounds.w || !bounds.h) return maxScale
+  const area = bounds.w * bounds.h
+  // At scale S, output pixels = area * S^2
+  // Stay under ~50M pixels to be safe
+  const MAX_PIXELS = 50_000_000
+  const idealScale = Math.sqrt(MAX_PIXELS / area)
+  // Round to nearest useful step: 2, 1.5, or 1
+  if (idealScale >= 2) return Math.min(maxScale, 2)
+  if (idealScale >= 1.5) return Math.min(maxScale, 1.5)
+  return 1
+}
+
+/**
  * Render a single Figma node as PNG. Returns { blob, scale }.
  * Automatically retries at lower scales if Figma times out on large nodes.
+ * Pass `bounds` to skip straight to the right scale (avoids wasted timeout attempts).
  */
-export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
-  const scalesToTry = scale === 2 ? [2, 1.5, 1] : [scale]
+export async function renderFigmaNode(fileKey, token, nodeId, scale = 2, bounds = null) {
+  const startScale = bounds ? pickStartScale(bounds, scale) : scale
+  const allScales = [2, 1.5, 1]
+  const scalesToTry = allScales.filter((s) => s <= startScale)
+  if (scalesToTry.length === 0) scalesToTry.push(1)
 
   for (const s of scalesToTry) {
     try {
@@ -77,7 +99,7 @@ export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
       const r = await fetch(imgUrl)
       if (!r.ok) throw new Error('Failed to download rendered image')
       const blob = await r.blob()
-      if (s < scale) console.warn(`Rendered ${nodeId} at ${s}x (reduced from ${scale}x due to timeout)`)
+      if (s < scale) console.warn(`Rendered ${nodeId} at ${s}x (reduced from ${scale}x)`)
       return { blob, scale: s }
     } catch (e) {
       if (e instanceof RenderTimeoutError && s !== scalesToTry[scalesToTry.length - 1]) {

@@ -197,20 +197,43 @@ export function useRenderSlice() {
       const images = []
       let flowNum = 0
 
-      // ── Render flows inside real Figma sections ──
-      for (const [sid, flows] of Object.entries(bySection)) {
-        const sec = sectionMap.get(sid)
-        if (!sec?.bounds) continue
+      // ── Phase 1: Kick off all section renders in parallel ──
+      // Figma's Image API returns a URL to the rendered image — the actual
+      // rendering happens on their servers. By requesting all sections at once
+      // (up to a concurrency limit), Figma renders them in parallel on their end.
+      const RENDER_CONCURRENCY = 3
+      const sectionEntries = Object.entries(bySection)
+        .map(([sid, flows]) => ({ sid, flows, sec: sectionMap.get(sid) }))
+        .filter(({ sec }) => sec?.bounds)
+
+      // Request all section renders concurrently (just the API call, not the download)
+      const renderPromises = []
+      for (let i = 0; i < sectionEntries.length; i += RENDER_CONCURRENCY) {
+        const batch = sectionEntries.slice(i, i + RENDER_CONCURRENCY)
+        const batchResults = await Promise.all(
+          batch.map(async ({ sid, sec }) => {
+            onProgress?.(`Requesting render for "${sec.name}"...`)
+            try {
+              const result = await renderFigmaNode(fileKey, token, sid, 2, sec.bounds)
+              return { sid, result, error: null }
+            } catch (e) {
+              return { sid, result: null, error: e }
+            }
+          })
+        )
+        renderPromises.push(...batchResults)
+      }
+
+      // ── Phase 2: Crop flows from the rendered images ──
+      for (const entry of sectionEntries) {
+        const { sid, flows, sec } = entry
         const sb = sec.bounds
-        const sectionArea = sb.w * sb.h
+        const renderResult = renderPromises.find((r) => r.sid === sid)
 
-        // Decide: render whole section, or split into smaller chunks?
-        if (sectionArea <= MAX_SECTION_AREA || flows.length <= 1) {
-          // ── Normal path: render the whole section at once ──
-          onProgress?.(`Rendering section "${sec.name}"...`)
-          const { blob: imgBlob } = await renderFigmaNode(fileKey, token, sid, 2)
-          const img = await createImageBitmap(imgBlob)
-
+        if (renderResult?.result) {
+          // Section rendered successfully — crop flows from it
+          onProgress?.(`Cropping flows from "${sec.name}"...`)
+          const img = await createImageBitmap(renderResult.result.blob)
           const { results, flowNum: newFlowNum } = await cropFlowsFromRender(
             img, sb, flows, flowNum, totalFlows, onProgress
           )
@@ -218,95 +241,56 @@ export function useRenderSlice() {
           flowNum = newFlowNum
           img.close()
         } else {
-          // ── Split path: section is large, render in chunks ──
-          const chunks = splitFlowsIntoChunks(flows, sb, MAX_SECTION_AREA)
-          onProgress?.(`Section "${sec.name}" is large — splitting into ${chunks.length} render(s)...`)
+          // Section render failed — fall back to per-frame rendering
+          onProgress?.(`Section "${sec.name}" render failed, rendering frames individually...`)
+          for (const flow of flows) {
+            flowNum++
+            onProgress?.(`Rendering "${flow.name}" (${flowNum}/${totalFlows})...`)
 
-          for (let ci = 0; ci < chunks.length; ci++) {
-            const chunk = chunks[ci]
-            onProgress?.(`Rendering "${sec.name}" part ${ci + 1}/${chunks.length}...`)
+            const origSection = sectionsWithFlows.find((s) => s.id === sid)
+            const origFlows = origSection?.flows || []
+            const origFlow = origFlows.find((f) => f.title === flow.name)
+            const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
+            if (frameIds.length === 0) continue
 
-            // Render the whole section but at a scale that won't timeout
-            // For chunks, we still render the section node — Figma doesn't support
-            // arbitrary bounding box renders. The auto-retry in renderFigmaNode
-            // handles scale reduction. We just crop a smaller set of flows each time.
-            // Only render once for the first chunk, reuse for subsequent if they
-            // all fit within the same section render.
-            if (ci === 0) {
-              // First chunk — do the section render
-              var sectionImg = null
-              var renderSucceeded = false
-              try {
-                const { blob: imgBlob } = await renderFigmaNode(fileKey, token, sid, 2)
-                sectionImg = await createImageBitmap(imgBlob)
-                renderSucceeded = true
-              } catch {
-                // If even the reduced-scale render fails, fall back to per-frame rendering
-                renderSucceeded = false
-              }
+            const blobMap = await renderFigmaNodes(fileKey, token, frameIds, 2)
+            const frameBitmaps = []
+            for (const fid of frameIds) {
+              const b = blobMap.get(fid)
+              if (b) frameBitmaps.push(await createImageBitmap(b))
+            }
+            if (frameBitmaps.length === 0) continue
+
+            const GAP = 16
+            let totalW = 0, maxH = 0
+            for (const bmp of frameBitmaps) {
+              totalW += bmp.width
+              if (bmp.height > maxH) maxH = bmp.height
+            }
+            totalW += GAP * (frameBitmaps.length - 1)
+
+            const canvas = document.createElement('canvas')
+            canvas.width = totalW
+            canvas.height = maxH
+            const ctx = canvas.getContext('2d')
+            let xOffset = 0
+            for (const bmp of frameBitmaps) {
+              ctx.drawImage(bmp, xOffset, 0)
+              xOffset += bmp.width + GAP
+              bmp.close()
             }
 
-            if (renderSucceeded && sectionImg) {
-              // Crop this chunk's flows from the section render
-              const { results, flowNum: newFlowNum } = await cropFlowsFromRender(
-                sectionImg, sb, chunk, flowNum, totalFlows, onProgress
-              )
-              images.push(...results)
-              flowNum = newFlowNum
-            } else {
-              // Fallback: render each flow's frames individually
-              for (const flow of chunk) {
-                flowNum++
-                onProgress?.(`Rendering "${flow.name}" individually (${flowNum}/${totalFlows})...`)
+            const [blob, dataUrl] = await Promise.all([
+              new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
+              Promise.resolve(canvas.toDataURL('image/png')),
+            ])
 
-                const origSection = sectionsWithFlows.find((s) => s.id === sid)
-                const origFlows = origSection?.flows || []
-                const origFlow = origFlows.find((f) => f.title === flow.name)
-                const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
-                if (frameIds.length === 0) continue
-
-                const blobMap = await renderFigmaNodes(fileKey, token, frameIds, 2)
-                const frameBitmaps = []
-                for (const fid of frameIds) {
-                  const b = blobMap.get(fid)
-                  if (b) frameBitmaps.push(await createImageBitmap(b))
-                }
-                if (frameBitmaps.length === 0) continue
-
-                const GAP = 16
-                let totalW = 0, maxH = 0
-                for (const bmp of frameBitmaps) {
-                  totalW += bmp.width
-                  if (bmp.height > maxH) maxH = bmp.height
-                }
-                totalW += GAP * (frameBitmaps.length - 1)
-
-                const canvas = document.createElement('canvas')
-                canvas.width = totalW
-                canvas.height = maxH
-                const ctx = canvas.getContext('2d')
-                let xOffset = 0
-                for (const bmp of frameBitmaps) {
-                  ctx.drawImage(bmp, xOffset, 0)
-                  xOffset += bmp.width + GAP
-                  bmp.close()
-                }
-
-                const [blob, dataUrl] = await Promise.all([
-                  new Promise((resolve) => canvas.toBlob(resolve, 'image/png')),
-                  Promise.resolve(canvas.toDataURL('image/png')),
-                ])
-
-                const secSlug = sanitize(flow.section || '')
-                const nameSlug = sanitize(flow.name)
-                const num = String(flowNum).padStart(2, '0')
-                const filename = secSlug ? `${num}-${secSlug}--${nameSlug}.png` : `${num}-${nameSlug}.png`
-                images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
-              }
-            }
+            const secSlug = sanitize(flow.section || '')
+            const nameSlug = sanitize(flow.name)
+            const num = String(flowNum).padStart(2, '0')
+            const filename = secSlug ? `${num}-${secSlug}--${nameSlug}.png` : `${num}-${nameSlug}.png`
+            images.push({ filename, blob, dataUrl, section: flow.section || '', name: flow.name })
           }
-
-          if (sectionImg) sectionImg.close()
         }
       }
 
