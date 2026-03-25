@@ -66,28 +66,34 @@ export async function renderFigmaNode(fileKey, token, nodeId, scale = 2) {
  * Returns a Map of nodeId -> Blob.
  */
 export async function renderFigmaNodes(fileKey, token, nodeIds, scale = 2) {
-  const ids = nodeIds.join(',')
-  const data = await figmaGet(
-    `/images/${fileKey}?ids=${ids}&format=png&scale=${scale}&use_absolute_bounds=true`,
-    token
-  )
-  const images = data.images || {}
   const results = new Map()
 
-  // Download all image URLs (with concurrency limit to avoid browser limits)
-  const BATCH_SIZE = 4
-  const entries = Object.entries(images).filter(([, url]) => url)
-  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-    const batch = entries.slice(i, i + BATCH_SIZE)
-    const blobs = await Promise.all(
-      batch.map(async ([nid, url]) => {
-        const r = await fetch(url)
-        if (!r.ok) return [nid, null]
-        return [nid, await r.blob()]
-      })
+  // Figma API limits IDs per request — chunk into batches of 10
+  const API_BATCH = 10
+  for (let i = 0; i < nodeIds.length; i += API_BATCH) {
+    const chunk = nodeIds.slice(i, i + API_BATCH)
+    const ids = chunk.join(',')
+    const data = await figmaGet(
+      `/images/${fileKey}?ids=${ids}&format=png&scale=${scale}&use_absolute_bounds=true`,
+      token
     )
-    for (const [nid, blob] of blobs) {
-      if (blob) results.set(nid, blob)
+    const images = data.images || {}
+
+    // Download image URLs with concurrency limit
+    const DL_BATCH = 4
+    const entries = Object.entries(images).filter(([, url]) => url)
+    for (let j = 0; j < entries.length; j += DL_BATCH) {
+      const batch = entries.slice(j, j + DL_BATCH)
+      const blobs = await Promise.all(
+        batch.map(async ([nid, url]) => {
+          const r = await fetch(url)
+          if (!r.ok) return [nid, null]
+          return [nid, await r.blob()]
+        })
+      )
+      for (const [nid, blob] of blobs) {
+        if (blob) results.set(nid, blob)
+      }
     }
   }
 
