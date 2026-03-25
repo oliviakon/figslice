@@ -79,7 +79,7 @@ export function ConnectStep({
       />
 
       {recentProjects.length > 0 && (
-        <div className="-mt-1 mb-3 flex flex-wrap gap-1.5">
+        <div className="mt-1 mb-3 flex flex-wrap gap-1.5">
           {recentProjects.map((p) => (
             <button
               key={p.name}
