@@ -180,10 +180,26 @@ export function extractPages(data, nodeId) {
   if (nodeId && data.nodes) {
     for (const [, nd] of Object.entries(data.nodes)) {
       const doc = nd.document || {}
+      const sections = extractSections(doc.children || [])
+
+      // If all frames ended up as "loose" (no Figma SECTION nodes found),
+      // use the parent node itself as the section — render it once, crop from it.
+      // This matches the Python tool's approach and avoids per-frame API calls.
+      const hasOnlyLoose = sections.length === 1 && sections[0].id === ''
+      if (hasOnlyLoose && doc.id && doc.absoluteBoundingBox) {
+        const bb = doc.absoluteBoundingBox
+        sections[0].id = doc.id
+        sections[0].name = doc.name || 'Selection'
+        sections[0].bounds = {
+          x: bb.x || 0, y: bb.y || 0,
+          w: bb.width || 0, h: bb.height || 0,
+        }
+      }
+
       pages.push({
         name: doc.name || 'Selection',
         id: doc.id || '',
-        sections: extractSections(doc.children || []),
+        sections,
       })
     }
   } else {
