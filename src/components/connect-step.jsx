@@ -1,8 +1,53 @@
-import { Lock } from 'lucide-react'
+import { useState } from 'react'
+import { Lock, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StepBadge } from '@/components/ui/badge'
+
+function TokenGuide() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-violet-400 transition-colors hover:text-violet-300"
+      >
+        How do I get a token?
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && (
+        <ol className="mt-2.5 space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.015] px-4 py-3 text-[12.5px] leading-relaxed text-zinc-400">
+          <li>
+            <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">1</span>
+            Open Figma and tap your <strong className="text-zinc-300">profile picture</strong> (top-left corner)
+          </li>
+          <li>
+            <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">2</span>
+            Go to <strong className="text-zinc-300">Settings</strong>
+          </li>
+          <li>
+            <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">3</span>
+            Click the <strong className="text-zinc-300">Security</strong> tab
+          </li>
+          <li>
+            <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">4</span>
+            Scroll to <strong className="text-zinc-300">Personal access tokens</strong> and hit <strong className="text-zinc-300">Generate new token</strong>
+          </li>
+          <li>
+            <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">5</span>
+            Set expiry to whatever you like, and under scopes select <strong className="text-zinc-300">All</strong> (or at minimum File content: Read)
+          </li>
+          <li>
+            <span className="mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-violet-600/20 text-[10px] font-bold text-violet-400">6</span>
+            Copy the token <strong className="text-zinc-300">immediately</strong> &mdash; you won&apos;t see it again! Paste it below.
+          </li>
+        </ol>
+      )}
+    </div>
+  )
+}
 
 export function ConnectStep({
   project,
@@ -59,15 +104,7 @@ export function ConnectStep({
       />
 
       <label className="mb-1.5 block text-[13px] font-medium text-zinc-400">
-        Personal access token{' '}
-        <a
-          href="https://www.figma.com/developers/api#access-tokens"
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs font-normal text-violet-500 hover:underline"
-        >
-          (get one here)
-        </a>
+        Personal access token
       </label>
       <Input
         type="password"
@@ -76,7 +113,9 @@ export function ConnectStep({
         placeholder="figd_..."
       />
 
-      <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-white/[0.04] bg-white/[0.01] px-3.5 py-2.5 text-[11.5px] text-zinc-500">
+      <TokenGuide />
+
+      <div className="flex items-start gap-2 rounded-lg border border-white/[0.04] bg-white/[0.01] px-3.5 py-2.5 text-[11.5px] text-zinc-500">
         <Lock size={13} className="mt-px shrink-0" />
         Your token is stored in your browser only and sent directly to Figma&apos;s API. No server
         involved.
