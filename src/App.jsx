@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { LayoutGrid } from 'lucide-react'
 import { useToast, Toast } from '@/components/ui/toast'
 import { ConnectStep } from '@/components/connect-step'
 import { ReviewStep } from '@/components/review-step'
@@ -118,8 +117,11 @@ export default function App() {
     <div className="relative z-10 mx-auto max-w-[1100px] px-5 py-8">
       {/* Header */}
       <div className="mb-1.5 flex items-center gap-2.5">
-        <LayoutGrid size={22} className="text-violet-500" />
-        <h1 className="text-[22px] font-bold tracking-tight">Figma Capture</h1>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-violet-500">
+          <path d="M12 2c-.5 0-1 .1-1.2.3-.3.2-.5.5-.6.8L9 6c-.5 1.2-.2 2.5.5 3.5.2.3.1.6-.1.8L7.5 12c-.5.5-.7 1.2-.7 1.9 0 2.5 1.8 5.5 4.2 7.3.3.2.7.3 1 .3s.7-.1 1-.3c2.4-1.8 4.2-4.8 4.2-7.3 0-.7-.2-1.4-.7-1.9l-1.9-1.7c-.2-.2-.3-.5-.1-.8.7-1 1-2.3.5-3.5l-1.2-2.9c-.1-.3-.3-.6-.6-.8C13 2.1 12.5 2 12 2z" fill="currentColor" opacity="0.85"/>
+          <path d="M12 2c0 0 .8-.2 1.5.8.4.5.5 1.2.3 1.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
+        </svg>
+        <h1 className="text-[22px] font-bold tracking-tight">figslice</h1>
       </div>
       <p className="mb-7 text-[13.5px] leading-relaxed text-zinc-500">
         Auto-slice Figma pages into flow screenshots. Runs entirely in your browser &mdash; nothing
