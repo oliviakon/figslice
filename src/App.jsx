@@ -59,9 +59,19 @@ function Sidebar() {
         </div>
       </nav>
 
-      <p className="mt-6 text-[10.5px] text-themed-muted/60">
-        Runs in-browser. Token never leaves your machine.
-      </p>
+      <div className="mt-6 space-y-2">
+        <a
+          href="https://www.notion.so/citrine-jeep-201/How-to-FigSlice-Auto-screenshot-32ed872e9d0280dca497e48543929f97"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-violet-500 transition-colors hover:text-violet-400"
+        >
+          Full guide &amp; prompts &rarr;
+        </a>
+        <p className="text-[10.5px] text-themed-muted/60">
+          Runs in-browser. Token never leaves your machine.
+        </p>
+      </div>
     </aside>
   )
 }
