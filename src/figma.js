@@ -19,6 +19,8 @@ export function parseFigmaUrl(url) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function figmaGet(path, token, retries = 3) {
+  let timeoutAttempts = 0
+  const MAX_TIMEOUT_RETRIES = 2
   for (let attempt = 0; attempt <= retries; attempt++) {
     const r = await fetch(`https://api.figma.com/v1${path}`, {
       headers: { 'X-FIGMA-TOKEN': token },
@@ -32,8 +34,14 @@ async function figmaGet(path, token, retries = 3) {
     if (!r.ok) {
       if (r.status === 403) throw new Error('Invalid token or no access to this file')
       const body = await r.text().catch(() => '')
-      // Surface render timeouts as a special error so callers can retry at lower scale
       if (r.status === 400 && body.includes('Render timeout')) {
+        if (timeoutAttempts < MAX_TIMEOUT_RETRIES) {
+          const wait = 2000 * 2 ** timeoutAttempts
+          console.warn(`Figma render timeout, retrying in ${wait}ms (attempt ${timeoutAttempts + 1}/${MAX_TIMEOUT_RETRIES})...`)
+          await sleep(wait)
+          timeoutAttempts++
+          continue
+        }
         throw new RenderTimeoutError(`Render timeout for ${path}`)
       }
       console.error(`Figma API ${r.status}:`, path, body)
@@ -63,17 +71,16 @@ export async function fetchFigmaFile(fileKey, token, nodeId) {
  * Figma tends to timeout when the output image exceeds ~60-70M pixels.
  * By predicting this upfront, we skip failed attempts at higher scales.
  */
-function pickStartScale(bounds, maxScale = 2) {
+function pickStartScale(bounds, maxScale = 1.5) {
   if (!bounds || !bounds.w || !bounds.h) return maxScale
   const area = bounds.w * bounds.h
-  // At scale S, output pixels = area * S^2
-  // Stay under ~50M pixels to be safe
-  const MAX_PIXELS = 50_000_000
+  // At scale S, output pixels = area * S^2. Stay under ~30M pixels — Figma
+  // tends to timeout well before its documented ~60M limit on complex scenes.
+  const MAX_PIXELS = 30_000_000
   const idealScale = Math.sqrt(MAX_PIXELS / area)
-  // Round to nearest useful step: 2, 1.5, or 1
-  if (idealScale >= 2) return Math.min(maxScale, 2)
   if (idealScale >= 1.5) return Math.min(maxScale, 1.5)
-  return 1
+  if (idealScale >= 1) return Math.min(maxScale, 1)
+  return 0.75
 }
 
 /**
@@ -81,11 +88,11 @@ function pickStartScale(bounds, maxScale = 2) {
  * Automatically retries at lower scales if Figma times out on large nodes.
  * Pass `bounds` to skip straight to the right scale (avoids wasted timeout attempts).
  */
-export async function renderFigmaNode(fileKey, token, nodeId, scale = 2, bounds = null) {
+export async function renderFigmaNode(fileKey, token, nodeId, scale = 1.5, bounds = null) {
   const startScale = bounds ? pickStartScale(bounds, scale) : scale
-  const allScales = [2, 1.5, 1]
+  const allScales = [1.5, 1, 0.75]
   const scalesToTry = allScales.filter((s) => s <= startScale)
-  if (scalesToTry.length === 0) scalesToTry.push(1)
+  if (scalesToTry.length === 0) scalesToTry.push(0.75)
 
   for (const s of scalesToTry) {
     try {
@@ -115,9 +122,9 @@ export async function renderFigmaNode(fileKey, token, nodeId, scale = 2, bounds 
  * Render multiple Figma nodes in a SINGLE API call.
  * Returns a Map of nodeId -> Blob.
  */
-export async function renderFigmaNodes(fileKey, token, nodeIds, scale = 2) {
+export async function renderFigmaNodes(fileKey, token, nodeIds, scale = 1.5) {
   const results = new Map()
-  const scalesToTry = scale === 2 ? [2, 1.5, 1] : [scale]
+  const scalesToTry = scale >= 1.5 ? [1.5, 1, 0.75] : [scale]
 
   // Figma API limits IDs per request — chunk into batches of 10
   const API_BATCH = 10

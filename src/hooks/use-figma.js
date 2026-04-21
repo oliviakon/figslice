@@ -214,7 +214,7 @@ export function useRenderSlice() {
           batch.map(async ({ sid, sec }) => {
             onProgress?.(`Requesting render for "${sec.name}"...`)
             try {
-              const result = await renderFigmaNode(fileKey, token, sid, 2, sec.bounds)
+              const result = await renderFigmaNode(fileKey, token, sid, 1.5, sec.bounds)
               return { sid, result, error: null }
             } catch (e) {
               return { sid, result: null, error: e }
@@ -253,7 +253,7 @@ export function useRenderSlice() {
             const frameIds = origFlow ? origFlow.frames.map((f) => f.id) : []
             if (frameIds.length === 0) continue
 
-            const blobMap = await renderFigmaNodes(fileKey, token, frameIds, 2)
+            const blobMap = await renderFigmaNodes(fileKey, token, frameIds, 1.5)
             const frameBitmaps = []
             for (const fid of frameIds) {
               const b = blobMap.get(fid)
@@ -308,7 +308,7 @@ export function useRenderSlice() {
         const allIds = flowFrameIds.flatMap((f) => f.frameIds)
         if (allIds.length > 0) {
           onProgress?.(`Rendering ${allIds.length} frames...`)
-          const blobMap = await renderFigmaNodes(fileKey, token, allIds, 2)
+          const blobMap = await renderFigmaNodes(fileKey, token, allIds, 1.5)
 
           for (const { flow, frameIds } of flowFrameIds) {
             if (frameIds.length === 0) continue
